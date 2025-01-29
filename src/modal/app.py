@@ -15,7 +15,7 @@ from src.feedback import manual_feedback as all_feedback
 
 @stub.function(
     volumes=VOLUME_CONFIG,
-    cpu=2.0,
+    cpu=6.0,
     image=stub.non_gpu_image,
     timeout=3600 * 12,
     concurrency_limit=512,
