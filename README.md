@@ -1,73 +1,104 @@
 # RLVF: Learning from Verbal Feedback without Overgeneralization
 
 ## Overview
-This repository includes a reference implementation of Contextualized Critiques with Constrained Preference Optimization (C3PO), a novel technique to align LLMs with user preferences from a single sentence of feedback and without overgeneralization. The repository also includes implementations of relevant baselines and other components necessary to explore the techniques proposed in the paper. See the [project website](https://austrian-code-wizard.github.io/c3po-website/) for more information.
+This repository provides a reference implementation of Contextualized Critiques with Constrained Preference Optimization (C3PO), a novel technique for aligning Large Language Models (LLMs) with user preferences. C3PO allows models to learn from a single sentence of feedback without overgeneralizing beyond the intended context. The repository includes implementations of C3PO, relevant baselines, and all components necessary to explore the techniques proposed in our paper.
 
-Paper: [RLVF: Learning from Verbal Feedback without Overgeneralization](insert_link.com)
+For more information, visit the [project website](https://austrian-code-wizard.github.io/c3po-website/).
 
-## What is in this repo?
-- `src/feedback/`: This folder contains feedbacks to use C3PO with. You can easily create your own by following the format in the provided feedback files. The feedbacks used for the experiments in the paper are in `src/feedback/final_exp.py`
-- `src/modal/`: All files related to launching sampling/training/eval jobs on Modal
-- `src/lcdpo.py`: Implementation of a custom trainer using the C3PO loss
-- `src/sft_weighted.py`: Implementation of a modified SFT trainer that includes weighted samples of near-scope and out-of-scope data in the loss. Used for the `SCD + Negatives` baseline.
-- `src/configs/`: Config files to sample/train/eval using the various methods from the paper
+Paper: [RLVF: Learning from Verbal Feedback without Overgeneralization](https://arxiv.org/abs/2402.10893)
 
-The purpose of other files should be identifiable based on their naming.
+## Repository Structure
+- `src/feedback/`: Contains feedback definitions for C3PO. You can create your own by following the format in the provided files. The feedbacks used in our paper experiments are in `src/feedback/final_exp.py`.
+- `src/modal/`: Contains all files related to launching sampling, training, and evaluation jobs on Modal.
+- `src/lcdpo.py`: Implements the custom trainer using the C3PO loss function.
+- `src/sft_weighted.py`: Implements a modified SFT trainer that includes weighted samples of near-scope and out-of-scope data in the loss. This is used for the `SCD + Negatives` baseline.
+- `src/configs/`: Contains configuration files for sampling, training, and evaluating using the various methods described in the paper.
+- `src/sample.py`: Handles data sampling for training and evaluation.
+- `src/train.py`: Implements the training pipeline.
+- `src/eval.py`: Implements the evaluation pipeline.
+
+Other files in the repository should be identifiable based on their naming conventions.
 
 # Running C3PO
 ## Prerequisites
-- Ensure you you Conda/Miniconda installed
-- Create conda env `conda create -n gfl python=3.11`
-- Activate env `conda activate gfl`
-- Install dependencies `pip install -r requirements.txt`
-
+- Ensure you have Conda/Miniconda installed
+- Create a conda environment: `conda create -n gfl python=3.11`
+- Activate the environment: `conda activate gfl`
+- Install dependencies: `pip install -r requirements.txt`
 
 ## Supported Platforms
+We utilize [Modal](https://www.modal.com) as our primary compute provider, and the examples below assume you have created and configured a Modal account. However, all functionality will work with any compute setup that provides sufficient resources:
+- For training: We recommend a 40GB A100 GPU
+- For evaluation: We recommend an L4 or A10G GPU
 
-We utilize [Modal](https://www.modal.com) as compute provider and the examples below assume you have created and configured a Modal account. However, everything detailed below will work using an arbitrary compute setup (as long as it provides sufficient resources. We recommend a 40GB A100 for training and an L4/A10G for eval).
+### Running Locally vs. on Modal
+- **Modal**: Use the commands as shown in the examples below
+- **Local**: Replace `modal run src.modal.app` with `python <script>.py` where `<script>.py` can be one of:
+  - `src/sample.py`
+  - `src/train.py`
+  - `src/eval.py`
+   
+Note: When running locally, only the `--arg_file`, `--run_id`, `--data_dir`, and `--feedback_prefix` flags are currently supported.
 
-When running locally, replace the `modal run src.modal.app` portion of the commands below with `pyhton <script>.py` where `<script>.py` can be one of `src/sample.py`, `src/train.py`, `src/eval.py`. Note that currently for the local scripts, only the `--arg_file`, `--run_id`, `--data_dir`, and `--feedback_prefix` flags are supported.
+## C3PO Workflow
+C3PO operates in a three-step workflow: Sampling → Training → Evaluation. Each step builds on the previous one and should use the same `run-id` to maintain data consistency.
 
-## Sampling
-Sampling is the first the first step of C3PO. For all feedbacks specified by your CMD line args, this will sample categories relevant to each feedback, prompts for each category, as well as baseline, revised, in-context, and CoT completions.
+### 1. Sampling
+Sampling is the first step of C3PO. This process:
+- Identifies categories relevant to each feedback specified in your command line arguments
+- Generates prompts for each category
+- Creates baseline, revised, in-context, and Chain-of-Thought (CoT) completions
 
-Example:
-`configs/config.json`:
-`modal run src.modal.app --arg-file configs/config.json --do-sample --feedback-prefix "Be more detailed" --run-id test`
+**Example:**
+```bash
+modal run src.modal.app --arg-file configs/config.json --do-sample --feedback-prefix "Be more detailed" --run-id test
+```
 
+### 2. Training
+The training step fine-tunes the specified base model on each of the feedbacks passed. This step uses the data generated during the sampling phase.
 
-## Training
-The training step will train fine-tune the specified base-model on each of the feedbacks passed.
+**Example:**
+```bash
+modal run src.modal.app --arg-file configs/config.json --do-train --feedback-prefix "Be more detailed" --run-id test
+```
 
-Example:
-`modal run src.modal.app --arg-file configs/config.json --do-train --feedback-prefix "Be more detailed" --run-id test`
+### 3. Evaluation
+The evaluation step compares responses from the method specified in the eval section of your config file with the baseline responses. This helps measure the effectiveness of your fine-tuned model.
 
-## Eval
-The eval step will compare the responses from the method specified in the eval part of the passed config file with the baseline responses.
+**Example:**
+```bash
+modal run src.modal.app --arg-file configs/config.json --do-eval --feedback-prefix "Be more detailed" --run-id test
+```
 
-Example:
-`modal run src.modal.app --arg-file configs/config.json --do-eval --feedback-prefix "Be more detailed" --run-id test`
-
-
-## Arguments
+## Command Line Arguments
 You can pass the following arguments to `modal run src.modal.app`:
-- `--arg_file`: File path to the config file to use. Required.
+
+### Required Arguments
+- `--arg_file`: File path to the config file to use.
+
+### Workflow Control
+- `--do_sample`: Flag to indicate whether to sample data. Defaults to `False`.
+- `--do_train`: Flag to indicate whether to train the model. Defaults to `False`.
+- `--do_eval`: Flag to indicate whether to evaluate the model. Defaults to `False`.
+
+### Data Management
 - `--run_id`: ID of the current run. Sampling/training/eval on the same data must use the same run_id.
 - `--data_dir`: Path to the output data directory. Defaults to `/results/data` for Modal and `./data` for local.
-- `--do_sample`: Binary flag to indicate whether to sample data. Defaults to False.
-- `--do_train`: Binary flag to indicate whether to train the model. Defaults to False.
-- `--do_eval`: Binary flag to indicate whether to evaluate the model. Defaults to False.
-- `--feedback_prefix`: Allows filtering feedbacks by prefix. Defaults to None.
-- `--second_feedback_prefix`: Allows to specify a second feedback for combined data training or combined adapter eval using its prefix. There must only be one feedback with this prefix. Defaults to None.
-- `--feedback_category`: Allows filtering feedbacks by category. Defaults to None.
-- `--copy_results`: Binary flag to indicate whether to copy results to local machine. Defaults to False.
-- `--sweep_params`: List of config param names to sweep. For example, `["training_args.learning_rate", "training_args.lora_r"]` Defaults to None.
-- `--sweep_values`: List of tuples of values to sweep. For example, `[(1e-5, 0.05), (5e-5, 0.1)]` Defaults to None.
+- `--copy_results`: Flag to indicate whether to copy results to local machine. Defaults to `False`.
 
-## Notes:
-- Sampling and eval data will be stored on the remote Modal volume and will be automatically copied to your local machine after each run, preserving the file system structure on the remote volume
-- Check out the Sampling, Training, and Model args for a full overview of the possible configuration options
-- By default, train / eval runs for the same parameters and run_id will overwrite old runs (so be careful)
+### Feedback Selection
+- `--feedback_prefix`: Allows filtering feedbacks by prefix. Defaults to `None`.
+- `--second_feedback_prefix`: Allows specifying a second feedback for combined data training or combined adapter evaluation using its prefix. There must only be one feedback with this prefix. Defaults to `None`.
+- `--feedback_category`: Allows filtering feedbacks by category. Defaults to `None`.
+
+### Hyperparameter Tuning
+- `--sweep_params`: List of config parameter names to sweep. For example, `["training_args.learning_rate", "training_args.lora_r"]`. Defaults to `None`.
+- `--sweep_values`: List of tuples of values to sweep. For example, `[(1e-5, 0.05), (5e-5, 0.1)]`. Defaults to `None`.
+
+## Important Notes
+- **Data Storage**: Sampling and evaluation data will be stored on the remote Modal volume and automatically copied to your local machine after each run, preserving the file system structure.
+- **Configuration Options**: Check out the Sampling, Training, and Model arguments in the configuration files for a full overview of all possible options.
+- **Overwriting Warning**: By default, training and evaluation runs with the same parameters and `run_id` will overwrite previous runs. Be careful to use unique `run_id` values when you want to preserve previous results.
 
 ## Citation
 
