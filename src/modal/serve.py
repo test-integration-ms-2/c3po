@@ -93,6 +93,7 @@ class Model:
                         adapter_name=adapter_name)
                     self.loaded_adapters.append(adapter_name)
 
+            # one more ~!
             combined_adapter_name = "-".join(adapter_names)
             if combined_adapter_name not in self.loaded_adapters:
                 self.model.model.add_weighted_adapter(adapter_names, [1.0 for _ in range(len(adapter_names))], combination_type="cat", adapter_name=combined_adapter_name)
